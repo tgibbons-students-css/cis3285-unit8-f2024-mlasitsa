@@ -6,15 +6,8 @@ namespace SingleResponsibilityPrinciple
     {
         const float LotSize = 100000f;
 
-        /// <summary>
-        /// Read the text file containing the trades. This file should in in the format of one trade per line
-        ///    GBPUSD,1000,1.51
-        /// </summary>
-        /// <param name="stream"> File must be passed in as a Stream. </param>
-        /// <returns> Returns a list of strings, one for each string for each line in the file </returns>
-        private IEnumerable<string> ReadTradeData(Stream stream)
+        internal IEnumerable<string> ReadTradeData(Stream stream)
         {
-            // read rows
             List<string> lines = new List<string>();
             using (var reader = new StreamReader(stream))
             {
@@ -27,13 +20,7 @@ namespace SingleResponsibilityPrinciple
             return lines;
         }
 
-        /// <summary>
-        /// Checks the formate on a single line in the trade file.
-        /// </summary>
-        /// <param name="fields"> The string must be split into three components before calling </param>
-        /// <param name="currentLine"> This is the current line number in the file, used to report errors</param>
-        /// <returns> true if all the checks pass </returns>
-        private bool ValidateTradeData(String[] fields, int currentLine)
+        internal bool ValidateTradeData(String[] fields, int currentLine)
         {
             if (fields.Length != 3)
             {
@@ -63,19 +50,13 @@ namespace SingleResponsibilityPrinciple
             return true;
         }
 
-        /// <summary>
-        /// Converts a string containing the trade data into a TradeRecord object
-        /// </summary>
-        /// <param name="fields"> The string must be split into three components before calling </param>
-        /// <returns> A TradeRecord object containing the trade data</returns>
-        private TradeRecord MapTradeDataToTradeRecord(String[] fields)
+        internal TradeRecord MapTradeDataToTradeRecord(String[] fields)
         {
             var sourceCurrencyCode = fields[0].Substring(0, 3);
             var destinationCurrencyCode = fields[0].Substring(3, 3);
             int tradeAmount = int.Parse(fields[1]);
             decimal tradePrice = decimal.Parse(fields[2]);
 
-            // calculate values
             var trade = new TradeRecord();
             trade.SourceCurrency = sourceCurrencyCode;
             trade.DestinationCurrency = destinationCurrencyCode;
@@ -84,12 +65,8 @@ namespace SingleResponsibilityPrinciple
 
             return trade;
         }
-        /// <summary>
-        /// Takes a list of strings containing trade data and converts this into a list of TradeRecord objects
-        /// </summary>
-        /// <param name="lines"> The strings containing the trade data, each string should contain one trade in format of "GBPUSD,1000,1.51"</param>
-        /// <returns> A list of TradeRecords, one record for each trade </returns>
-        private IEnumerable<TradeRecord> ParseTrades(IEnumerable<string> lines)
+
+        internal IEnumerable<TradeRecord> ParseTrades(IEnumerable<string> lines)
         {
             List<TradeRecord> trades = new List<TradeRecord>();
 
@@ -110,31 +87,19 @@ namespace SingleResponsibilityPrinciple
             }
             return trades;
         }
-        /// <summary>
-        /// Write the trade records to the database
-        /// </summary>
-        /// <param name="trades"> A list of TradeRecord objects </param>
-        private void StoreTrades(IEnumerable<TradeRecord> trades)
+
+        internal void StoreTrades(IEnumerable<TradeRecord> trades)
         {
             LogMessage("INFO: Connecting to database");
-            // Template for connection string from database connection file
-            //    The @ sign allows for back slashes
-            //    Watch for double quotes which must be escaped using "" 
-            //    Watch for extra spaces after C: and avoid paths with - hyphens -
-            string genericConnectString = @"Data Source=(local);Initial Catalog=TradeDatabase;Integrated Security=True;";
-            // The datadirConnectString connection string uses |DataDirectory| 
-            //    and assumes the tradedatabase.mdf file is stored in 
-            //    SingleResponsibilityPrinciple\bin\Debug 
-            string datadirConnectString = @"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename=|DataDirectory|\tradedatabase.mdf;Integrated Security=True;Connect Timeout=30;";
-            // This users the Azure connection string
-            string azureConnectString = @"Data Source=cis3115-server.database.windows.net;Initial Catalog=CIS3115;User ID=cis3115;Password=Saints4SQL;Connect Timeout=60;Encrypt=True;TrustServerCertificate=False;ApplicationIntent=ReadWrite;MultiSubnetFailover=False";
-           
-            // Change the connection string used to match the one you want
-            using (var connection = new SqlConnection(genericConnectString))
+
+            // Updated connection string to use the attached database
+            string datadirConnectString = @"Server=(LocalDB)\libckout10-ngna;Database=TradeDatabase;Integrated Security=True;";
+
+            using (var connection = new SqlConnection(datadirConnectString))
             {
-                LogMessage("INFO:Going to open database connection");
+                LogMessage("INFO: Going to open database connection");
                 connection.Open();
-                LogMessage("INFO:Database connection OPEN");
+                LogMessage("INFO: Database connection OPEN");
 
                 using (var transaction = connection.BeginTransaction())
                 {
@@ -143,7 +108,7 @@ namespace SingleResponsibilityPrinciple
                         var command = connection.CreateCommand();
                         command.Transaction = transaction;
                         command.CommandType = System.Data.CommandType.StoredProcedure;
-                        command.CommandText = "dbo.insert_trade";
+                        command.CommandText = "InsertTrade";
                         command.Parameters.AddWithValue("@sourceCurrency", trade.SourceCurrency);
                         command.Parameters.AddWithValue("@destinationCurrency", trade.DestinationCurrency);
                         command.Parameters.AddWithValue("@lots", trade.Lots);
@@ -155,6 +120,7 @@ namespace SingleResponsibilityPrinciple
 
                     transaction.Commit();
                 }
+
                 connection.Close();
             }
 
@@ -166,16 +132,11 @@ namespace SingleResponsibilityPrinciple
             Console.WriteLine(message, args);
         }
 
-        /// <summary>
-        /// Main routine that processes the trade file
-        /// </summary>
-        /// <param name="stream"> The text file contianing the trade data </param>
         public void ProcessTrades(Stream stream)
         {
             var lines = ReadTradeData(stream);
             var trades = ParseTrades(lines);
             StoreTrades(trades);
         }
-
     }
 }
